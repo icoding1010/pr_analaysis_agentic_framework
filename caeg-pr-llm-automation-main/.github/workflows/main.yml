@@ -1,0 +1,194 @@
+# .github/workflows/pr_analysis.yml
+
+name: SWE-Agent PR Analysis
+
+on:
+  workflow_call:
+    secrets:
+      access-token: 
+        description: 'A token passed from the caller workflow'
+        required: true
+      API_KEY:
+        description: 'API KEY'
+        required: true
+  workflow_dispatch:
+  # pull_request:
+  #   types: [opened, edited, synchronize, reopened]
+  #   branches:
+  #      - main
+
+jobs:
+  analyze_pr_job: 
+  
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          repository: awl-jp/caeg-pr-llm-automation
+          token: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }}
+        
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      
+      # - name: Extract full branch reference 
+      #   id: extract-branch
+      #   run: echo "FULL_BRANCH=${{ github.ref }}" >> $GITHUB_ENV
+
+      # - name: Print full branch reference
+      #   id: get-branch-name
+      #   run: |
+      #     full_branch=${{ env.FULL_BRANCH }}
+      #     echo "full_branch=$full_branch"
+
+      # - name: Extract branch name
+      #   run: |
+      #     branch_name=$(basename "${{ env.FULL_BRANCH }}")
+      #     echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
+
+      # - name: Print branch name 
+      #   run: echo "branch_name=${{ env.BRANCH_NAME }}" 
+          
+      # - name: Get PR number
+      #   id: get-pr
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS}}  # Replace with your personal access token
+      #     REPO_OWNER: ${{ github.repository_owner }}
+      #     REPO_NAME: ${{ github.event.repository.name }}
+      #     BRANCH_NAME: ${{ env.BRANCH_NAME }}
+      #   run: |
+      #     PR_NUMBER=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+      #       -H "Accept: application/vnd.github.v3+json" \
+      #       "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/pulls?head=$REPO_OWNER:$BRANCH_NAME" \
+      #       | jq -r '.[0].number')
+      #     echo "PR number=$PR_NUMBER"
+      #     echo "::set-output name=pr_number::$PR_NUMBER"
+
+      # - name: Check if PR exists
+      #   run: |
+      #     PR_NUMBER=${{ steps.get-pr.outputs.pr_number }}
+      #     if [ -z "$PR_NUMBER" ]; then
+      #       echo "No PR found for branch $BRANCH_NAME"
+      #     else
+      #       echo "PR number for branch $BRANCH_NAME: $PR_NUMBER"
+      #     fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+          pip install -r scripts/swe-agent/requirements.txt
+          
+      - name: Set environment variables
+        run: |
+          echo "GITHUB_REPO=${{ github.repository }}" >> $GITHUB_ENV
+          # echo "PR_NUMBER=${{ github.event.inputs.pr_number || 'none' }}" >> $GITHUB_ENV
+        
+      - name: Run pre-analysis script
+        env:
+          # GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          # GITHUB_REPO: ${{ env.GITHUB_REPO }}
+          # PR_NUMBER: ${{ env.PR_NUMBER }}
+          # PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
+          # BASE_COMMIT: ${{ env.head_commit }}  # Use retrieved head_commit
+          # VERSION: ${{ env.version }}
+          GITHUB_TOKEN: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }}  
+          GITHUB_REPO: "awl-jp/core-ai-engine-sdk"
+          # PR_NUMBER: 1083
+          PR_NUMBER: 1075
+          # BASE_COMMIT: "" 
+          # VERSION: ""
+          # GITHUB_REPO: ${{ env.GITHUB_REPO }}
+          # PR_NUMBER: ${{ env.PR_NUMBER }}
+          # BASE_COMMIT: ${{ env.head_commit }}
+          # VERSION: ${{ env.version }}
+          # GITHUB_TOKEN: ${{ secrets.access-token }}  
+        run: python scripts/pre-analysis.py    
+
+      - name: Create analysis folder
+        run: mkdir -p analysis-u
+ 
+      - name: Run setup.sh
+        run: |
+          git update-index --chmod=+x ./scripts/swe-agent/setup.sh
+              
+      - name: Store analysis.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis.json
+          path: analysis-u/analysis.json
+          
+      - name: Store .patch as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model.patch
+          path: model.patch
+      
+      - name: Store swe_json_data.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swe_json_data.json
+          path: swe_json_data.json
+
+  # comment_pr_job:
+  
+  #     needs: analyze_pr_job
+  #     runs-on: ubuntu-latest
+  #     defaults:
+  #       run:
+  #         shell: bash -l {0}
+          
+  #     steps:
+  #       - name: Checkout code
+  #         uses: actions/checkout@v2
+  #         with:
+  #           repository: awl-jp/caeg-pr-llm-automation
+  #           token: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }}
+          
+  #       - name: Set up Python
+  #         uses: actions/setup-python@v2
+  #         with:
+  #           python-version: '3.x'
+  
+      - name: Install dependencies
+        run: |
+          pip install requests
+          pip install openai
+            
+      - name: Download .patch artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model.patch
+
+      - name: Download analysis.json artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis.json
+
+      - name: Set environment variables
+        run: |
+          # echo "GITHUB_REPO="awl-jp/caeg-pr-llm-automation""
+          # echo "PR_NUMBER=1"
+          echo "GITHUB_REPO=${{ github.repository }}" >> $GITHUB_ENV
+          # echo "PR_NUMBER=${{ github.event.inputs.pr_number || 'none' }}" >> $GITHUB_ENV
+
+      - name: Run comment script
+        env:
+          GITHUB_REPOSITORY: ${{ env.GITHUB_REPO }}
+          # PR_NUMBER: ${{ env.PR_NUMBER }}
+          # PR_NUMBER: ${{ steps.get-pr.outputs.pr_number }}
+          # GITHUB_REPOSITORY: "awl-jp/caeg-pr-llm-automation"
+          PR_NUMBER: 1
+          # GITHUB_TOKEN: ${{ secrets.access-token }}  
+          # GITHUB_TOKEN: ''
+          API_KEY: ${{ secrets.API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }}
+          # API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          python scripts/comment-to-pr.py analysis.json model.patch

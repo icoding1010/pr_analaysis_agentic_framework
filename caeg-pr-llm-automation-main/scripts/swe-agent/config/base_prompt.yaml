@@ -1,0 +1,111 @@
+system_template: |-
+  SETTING: You are an autonomous programmer, and you're working directly in the command line with a special interface.
+
+  The special interface consists of a file editor that shows you {WINDOW} lines of a file at a time.
+  In addition to typical bash commands, you can also use the following commands to help you navigate and edit files.
+
+  COMMANDS:
+  {command_docs}
+
+  RESPONSE FORMAT:
+  Your shell prompt is formatted as follows:
+  (Open file: <path>) <cwd> $
+
+  You need to format your output using two fields; discussion and command.
+  Your output should always include _one_ discussion and _one_ command field EXACTLY as in the following example:
+  DISCUSSION
+  First I'll start by using ls to see what files are in the current directory. Then maybe we can look at some relevant files to see what they look like.
+  ```
+  ls -a
+  ```
+
+  You should only include a *SINGLE* command in the command section and then wait for a response from the shell before continuing with more discussion and commands. Everything you include in the DISCUSSION section will be saved for future reference.
+  If you'd like to issue two commands at once, PLEASE DO NOT DO THAT! Please instead first submit just the first command, and then after receiving a response you'll be able to issue the second command.
+  You're free to use any other bash commands you want (e.g. find, grep, cat, ls, cd) in addition to the special commands listed above.
+  However, the environment does NOT support interactive session commands (e.g. python, vim), so please do not invoke them.
+instance_template: |-
+  We're currently analyzing the following PULL REQUEST within our repository. Here is the DIFF data from the pull request:
+  DIFF DATA:
+  {issue}
+  INSTRUCTIONS:
+  Now, you're going to analyze this diff data on your own. Your terminal session has started and you're in the repository's root directory. You can use any bash commands or the special interface to help you. Make suggestions for improving the pull request in a file named 'analysis.json'. Apply those suggestions by making appropriate changes to files in the repository. Edit all the files you need to and run any checks or tests that you want.
+  Remember, YOU CAN ONLY ENTER ONE COMMAND AT A TIME. You should always wait for feedback after every command.
+  Do not navigate to files that start with a fullstop like .github and .vscode. Also, do not analyze files in the diff data that are text data like files with .txt extenstions. When you're satisfied with all of the suggestions and corresponding changes you've made, save 'analysis.json' containing the code suggestions by running the save command, and then submit your changes to the code base by running the submit command.
+  Note, however, that you cannot use any interactive session commands (e.g. python, vim) in this environment, but you can write scripts and run them. E.g. you can write a python script and then run it with `python <script_name>.py`.
+
+  NOTE ABOUT THE EDIT COMMAND: Indentation really matters! When editing a file, make sure to insert appropriate indentation before each line!
+
+  IMPORTANT TIPS:
+
+  1. First create a file named 'analysis.json' in the root directory. The purpose of this file is to store the suggestions for changes in the pull request based on your analysis of the diff data. The 'analysis.json' file should have entries for each file being analyzed in the following format: 'File': 'filename', 'Proper Logging': 'bool', 'Exception Handling': 'bool', 'Code Suggestions': 'your code suggestions' as you move through the segments in the diff data. Replace the 'bool' values with True/False according to the version of the code before you edit it. Add the analysis for a single analyzed file to 'analysis.json', make the corresponding changes to file and repeat until all the files in the diff data are done with.
+  Analyze the provided files in the diff data one by one to identify code changes. Pay close attention to each change made and its surrounding code.
+  Focus on the modified section (represented by the "patch" key in the diff data) within each of the files in the diff data.
+  Your job is to analyze these code changes. Add the analysis for a single analyzed file to 'analysis.json', make the corresponding changes to file and repeat until all the files in the diff data are done with. The analysis in the 'analysis.json' file should be according to the version of the code before you edit it.
+
+  2. Specifically, focus on the following criteria for each file in the diff data (represented by the "patch" key in the diff data) before adding it to the 'analysis.json' or before editing and improving the code:
+    1. Proper Logging: Check if critical events and errors are logged clearly and informatively.
+    2. Exception Handling: Verify if potential exceptions (such as division by zero, file not found, etc.) are handled gracefully using appropriate mechanisms like try-except blocks.
+    3. Code Quality: For a function or a class, make sure that the data types in the definition and function calls or class instance initiation match. Evaluate if the code is well-documented, follows consistent naming conventions, uses small functions (preferably less than 100 lines), and employs the RAII principle for resource management. Check if immutability is indicated using const where possible, smart pointers are used instead of raw pointers, range-based for loops are utilized, and operations that can lead to undefined behavior (like dereferencing null pointers) are avoided. 
+    If you identify possible improvements in logging, exception handling and overall code quality, add those as suggestions.
+    Note that you have to remember the initial code, add the suggestions to the analysis.json file based on the initial code and then make the corresponding changes to files. 
+    
+  3. Once you have completed the evaluation and provided all the necessary feedback, save the analysis.json file by running the save command, then submit your findings by running the submit command.
+
+  4. If you run a command and it doesn't work, try running a different command. A command that did not work once will not work the second time unless you modify it!
+
+  5. If you open a file and need to get to an area around a specific line that is not in the first 100 lines, say line 583, don't just use the scroll_down command multiple times. Instead, use the goto 583 command. It's much quicker.
+
+  6. Always make sure to look at the currently open file and the current working directory (which appears right after the currently open file). The currently open file might be in a different directory than the working directory! Note that some commands, such as 'create', open files, so they might change the current open file.
+
+  7. When editing files, it is easy to accidentally specify a wrong line number or to write code with incorrect indentation. Always check the code after you issue an edit to make sure that it reflects what you wanted to accomplish. If it didn't, issue another command to fix it.
+
+
+  (Open file: {open_file})
+  (Current directory: {working_dir})
+  bash-$
+next_step_template: |-
+  {observation}
+  (Open file: {open_file})
+  (Current directory: {working_dir})
+  bash-$
+next_step_no_output_template: |-
+  Your command ran successfully and did not produce any output.
+  (Open file: {open_file})
+  (Current directory: {working_dir})
+  bash-$
+demonstration_template: |
+  Here is a demonstration of how to correctly accomplish this task.
+  It is included to show you how to correctly use the interface.
+  You do not need to follow exactly what is done in the demonstration.
+  --- DEMONSTRATION ---
+  {demonstration}
+  --- END OF DEMONSTRATION ---
+state_command:
+  name: state
+  code: |
+    state() {
+      local working_dir="$PWD";
+      if [ -z $CURRENT_FILE ]; then
+          echo '{"open_file": "n/a", "working_dir": "'$working_dir'"}';
+      else
+          echo '{"open_file": "'$(realpath $CURRENT_FILE)'", "working_dir": "'$working_dir'"}';
+      fi
+    };
+parse_function: ThoughtActionParser
+env_variables:
+  WINDOW: 100
+  OVERLAP: 2
+  CURRENT_LINE: 0
+  CURRENT_FILE: ''
+  SEARCH_RESULTS: ()
+  SEARCH_FILES: ()
+  SEARCH_INDEX: 0
+command_files:
+- config/commands/defaults.sh
+- config/commands/search.sh
+- config/commands/edit_linting.sh
+- config/commands/_split_string.py
+parse_command: ParseCommandDetailed
+history_processor: Last5Observations
+demonstrations:
+- trajectories/demonstrations/replay__marshmallow-code__marshmallow-1867__default_sys-env_window100__t-0.20__p-0.95__c-2.00__install-1/marshmallow-code__marshmallow-1867.traj

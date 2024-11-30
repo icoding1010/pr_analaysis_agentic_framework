@@ -1,0 +1,100 @@
+# .github/workflows/pr_analysis.yml
+
+name: Autogen PR analysis
+on:
+  workflow_dispatch:
+  
+jobs:
+
+  run_autogen_job: 
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      # - name: Extract full branch reference 
+      #   id: extract-branch
+      #   run: echo "FULL_BRANCH=${{ github.ref }}" >> $GITHUB_ENV
+
+      # - name: Print full branch reference
+      #   id: get-branch-name
+      #   run: |
+      #     full_branch=${{ env.FULL_BRANCH }}
+      #     echo "full_branch=$full_branch"
+
+      # - name: Extract branch name
+      #   run: |
+      #     branch_name=$(basename "${{ env.FULL_BRANCH }}")
+      #     echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
+
+      # - name: Print branch name 
+      #   run: echo "branch_name=${{ env.BRANCH_NAME }}" 
+          
+      # - name: Get PR number
+      #   id: get-pr
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS}}  # Replace with your personal access token
+      #     REPO_OWNER: ${{ github.repository_owner }}
+      #     REPO_NAME: ${{ github.event.repository.name }}
+      #     BRANCH_NAME: ${{ env.BRANCH_NAME }}
+      #   run: |
+      #     PR_NUMBER=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+      #       -H "Accept: application/vnd.github.v3+json" \
+      #       "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/pulls?head=$REPO_OWNER:$BRANCH_NAME" \
+      #       | jq -r '.[0].number')
+      #     echo "PR number=$PR_NUMBER"
+      #     echo "::set-output name=pr_number::$PR_NUMBER"
+
+      # - name: Check if PR exists
+      #   run: |
+      #     PR_NUMBER=${{ steps.get-pr.outputs.pr_number }}
+      #     if [ -z "$PR_NUMBER" ]; then
+      #       echo "No PR found for branch $BRANCH_NAME"
+      #     else
+      #       echo "PR number for branch $BRANCH_NAME: $PR_NUMBER"
+      #     fi
+
+      - name: Build Docker image
+        run: docker build -f ./scripts_autogen/Dockerfile -t autogen_base_img .
+      
+      - name: Run Docker container (run.py)
+        run: |
+            # docker run -e token=${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }} -e pr_number=${{ steps.get-pr.outputs.pr_number }} -e api_key=${{ secrets.API_KEY }} -e repo_owner=${{ github.repository }} -v ${{ github.workspace }}/scripts_autogen/scripts:/app autogen_base_img python /app/run.py
+            docker run -e token=${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }} -e pr_number=1083 -e api_key=${{ secrets.API_KEY }} -e repo_owner="awl-jp/core-ai-engine-sdk" -v ${{ github.workspace }}/scripts_autogen/scripts:/app autogen_base_img python /app/run.py
+            
+      - name: Install dependencies
+        run: |
+          pip install requests
+          pip install openai
+          
+      - name: Show contents of github workspace
+        run: |
+          ls ${{ github.workspace }}
+
+      - name: Show contents of github workspace/scripts_autogen/scripts
+        run: |
+          ls ${{ github.workspace }}/scripts_autogen/scripts
+
+      - name: Show contents of github workspace/scripts_autogen/scripts/repo
+        run: |
+          ls ${{ github.workspace }}/scripts_autogen/scripts/repo
+          
+      - name: Store analysis.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis.json
+          path: ${{ github.workspace }}/scripts_autogen/scripts/repo/analysis.json
+          
+      - name: Run comment script
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          # pr_number: ${{ steps.get-pr.outputs.pr_number }}
+          pr_number: 1
+          GITHUB_TOKEN: ${{ secrets.SECRET_FOR_LLM_PR_ANALYSIS }}  
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          python scripts_autogen/comment_pr.py ${{ github.workspace }}/scripts_autogen/scripts/repo/analysis.json
